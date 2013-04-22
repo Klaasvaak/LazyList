@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
 import android.os.Handler;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -34,7 +35,7 @@ public class ImageLoader {
     }
     
     final int stub_id=R.drawable.stub;
-    public void DisplayImage(String url, ImageView imageView)
+    public void DisplayImage(String url, ImageView imageView, final int REQUIRED_SIZE)
     {
         imageViews.put(imageView, url);
         Bitmap bitmap=memoryCache.get(url);
@@ -42,23 +43,23 @@ public class ImageLoader {
             imageView.setImageBitmap(bitmap);
         else
         {
-            queuePhoto(url, imageView);
+            queuePhoto(url, imageView, REQUIRED_SIZE);
             imageView.setImageResource(stub_id);
         }
     }
         
-    private void queuePhoto(String url, ImageView imageView)
+    private void queuePhoto(String url, ImageView imageView, final int REQUIRED_SIZE)
     {
-        PhotoToLoad p=new PhotoToLoad(url, imageView);
+        PhotoToLoad p=new PhotoToLoad(url, imageView, REQUIRED_SIZE);
         executorService.submit(new PhotosLoader(p));
     }
     
-    private Bitmap getBitmap(String url) 
+    private Bitmap getBitmap(String url, final int REQUIRED_SIZE) 
     {
         File f=fileCache.getFile(url);
         
         //from SD cache
-        Bitmap b = decodeFile(f);
+        Bitmap b = decodeFile(f, REQUIRED_SIZE);
         if(b!=null)
             return b;
         
@@ -75,7 +76,7 @@ public class ImageLoader {
             Utils.CopyStream(is, os);
             os.close();
             conn.disconnect();
-            bitmap = decodeFile(f);
+            bitmap = decodeFile(f, REQUIRED_SIZE);
             return bitmap;
         } catch (Throwable ex){
            ex.printStackTrace();
@@ -86,7 +87,7 @@ public class ImageLoader {
     }
 
     //decodes image and scales it to reduce memory consumption
-    private Bitmap decodeFile(File f){
+    private Bitmap decodeFile(File f, final int REQUIRED_SIZE){
         try {
             //decode image size
             BitmapFactory.Options o = new BitmapFactory.Options();
@@ -96,7 +97,6 @@ public class ImageLoader {
             stream1.close();
             
             //Find the correct scale value. It should be the power of 2.
-            final int REQUIRED_SIZE=70;
             int width_tmp=o.outWidth, height_tmp=o.outHeight;
             int scale=1;
             while(true){
@@ -127,9 +127,11 @@ public class ImageLoader {
     {
         public String url;
         public ImageView imageView;
-        public PhotoToLoad(String u, ImageView i){
+        public final int REQUIRED_SIZE;
+        public PhotoToLoad(String u, ImageView i, int requiredSize){
             url=u; 
             imageView=i;
+            REQUIRED_SIZE = requiredSize;
         }
     }
     
@@ -144,7 +146,7 @@ public class ImageLoader {
             try{
                 if(imageViewReused(photoToLoad))
                     return;
-                Bitmap bmp=getBitmap(photoToLoad.url);
+                Bitmap bmp=getBitmap(photoToLoad.url, photoToLoad.REQUIRED_SIZE);
                 memoryCache.put(photoToLoad.url, bmp);
                 if(imageViewReused(photoToLoad))
                     return;
